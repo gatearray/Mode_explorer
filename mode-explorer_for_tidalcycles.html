@@ -1,0 +1,1097 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mode-Explorer for Tidalcycles</title>
+  <style>
+    :root {
+      --bg-color: #121212;
+      --panel-bg: #1e1e1e;
+      --text-main: #e0e0e0;
+      --accent: #00d2ff;
+      --added: #4CAF50;
+      --removed: #F44336;
+      --subset: #ff9800;
+      --tag-chord: #ff4b2b;
+      --tag-tendency: #f7b733;
+      --tag-group: #8e2de2;
+    }
+
+    body {
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      margin: 0;
+      padding: 20px;
+      box-sizing: border-box;
+      height: 100vh;
+      overflow: hidden;
+      /* 全体スクロールを防止 */
+    }
+
+    .container {
+      width: 100%;
+      height: 100%;
+      display: grid;
+      grid-template-columns: 55% 1fr;
+      /* 左右分割 */
+      gap: 20px;
+    }
+
+    @media (max-width: 900px) {
+      body {
+        overflow: auto;
+        height: auto;
+      }
+
+      .container {
+        grid-template-columns: 1fr;
+      }
+
+      .right-panel {
+        height: auto !important;
+        overflow: visible !important;
+      }
+
+      .right-scrollable {
+        overflow-y: visible !important;
+      }
+    }
+
+    .panel {
+      background-color: var(--panel-bg);
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .left-panel {
+      height: 100%;
+      overflow: hidden;
+    }
+
+    .right-panel {
+      height: 100%;
+      padding: 0;
+      background: transparent;
+      box-shadow: none;
+      display: flex;
+      /* バグ修正: flexを適用 */
+      flex-direction: column;
+      /* バグ修正: 縦並び */
+      overflow: hidden;
+      /* バグ修正: はみ出し防止 */
+    }
+
+    .right-fixed {
+      background-color: var(--panel-bg);
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+      flex-shrink: 0;
+      margin-bottom: 20px;
+    }
+
+    .right-scrollable {
+      background-color: var(--panel-bg);
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+      flex-grow: 1;
+      overflow-y: auto;
+      /* スクロール有効化 */
+      min-height: 0;
+      /* バグ修正: flex-grow 下での高さ崩れ防止 */
+    }
+
+    h1 {
+      font-size: 1.4rem;
+      color: var(--accent);
+      margin: 0 0 15px 0;
+    }
+
+    h2 {
+      font-size: 1.1rem;
+      margin: 0 0 15px 0;
+      border-bottom: 1px solid #333;
+      padding-bottom: 5px;
+    }
+
+    /* Controls Styling */
+    .controls-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 10px;
+      margin-bottom: 15px;
+      background: #252525;
+      padding: 12px;
+      border-radius: 6px;
+      border: 1px solid #333;
+    }
+
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .control-group label {
+      font-size: 0.75rem;
+      color: #aaa;
+      font-weight: bold;
+    }
+
+    select,
+    input[type="range"] {
+      width: 100%;
+      padding: 6px;
+      background: #111;
+      color: white;
+      border: 1px solid #444;
+      border-radius: 4px;
+      font-size: 0.9rem;
+      outline: none;
+    }
+
+    /* Buttons */
+    .btn {
+      background: #333;
+      color: #fff;
+      border: 1px solid #555;
+      padding: 6px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      transition: background 0.2s;
+    }
+
+    .btn:hover {
+      background: #444;
+    }
+
+    .btn-play {
+      background: var(--accent);
+      color: #000;
+      font-weight: bold;
+      border: none;
+    }
+
+    .btn-play:hover {
+      background: #3a7bd5;
+      color: #fff;
+    }
+
+    .toggle-checkbox {
+      display: none;
+    }
+
+    .toggle-label {
+      background: #333;
+      color: #888;
+      padding: 6px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      text-align: center;
+      border: 1px solid #555;
+      user-select: none;
+    }
+
+    .toggle-checkbox:checked+.toggle-label {
+      background: var(--removed);
+      color: #fff;
+      border-color: var(--removed);
+      font-weight: bold;
+    }
+
+    /* Info Card */
+    .info-title {
+      font-size: 1.3rem;
+      margin-bottom: 10px;
+      font-weight: bold;
+      color: #fff;
+    }
+
+    .tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+
+    .tag {
+      font-size: 0.7rem;
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-weight: bold;
+      color: #fff;
+    }
+
+    .tag.group {
+      background-color: var(--tag-group);
+    }
+
+    .tag.chord {
+      background-color: var(--tag-chord);
+    }
+
+    .tag.tendency {
+      background-color: var(--tag-tendency);
+    }
+
+    .description {
+      font-size: 0.85rem;
+      line-height: 1.4;
+      color: #ccc;
+      margin: 0 0 10px 0;
+    }
+
+    /* Collapsible Details */
+    details {
+      background: #1a1a1a;
+      border-radius: 4px;
+      border: 1px solid #333;
+      margin-top: 8px;
+    }
+
+    details summary {
+      padding: 8px;
+      font-size: 0.8rem;
+      font-weight: bold;
+      color: #ccc;
+      cursor: pointer;
+      list-style: none;
+    }
+
+    details summary::-webkit-details-marker {
+      display: none;
+    }
+
+    details summary::before {
+      content: "▶";
+      display: inline-block;
+      margin-right: 6px;
+      font-size: 0.7rem;
+      transition: transform 0.2s;
+    }
+
+    details[open] summary::before {
+      transform: rotate(90deg);
+    }
+
+    .details-content {
+      padding: 0 8px 8px 8px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .subset-btn {
+      background: #333;
+      border: 1px solid #555;
+      color: #ccc;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .subset-btn:hover {
+      background: #444;
+    }
+
+    .subset-btn.active {
+      background: var(--subset);
+      color: #000;
+      font-weight: bold;
+      border-color: var(--subset);
+    }
+
+    .sub-tag {
+      background: #222;
+      padding: 4px 8px;
+      border-radius: 4px;
+      color: #aaa;
+      font-size: 0.75rem;
+      border: 1px solid #444;
+    }
+
+    /* Visualizer Area */
+    .vis-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      flex-shrink: 0;
+    }
+
+    .circle-container {
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      max-height: calc(100vh - 220px);
+      /* 画面からはみ出さないように制限 */
+      margin: auto auto 10px auto;
+      /* バグ修正: 上寄りに配置 */
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .interactive-node {
+      cursor: pointer;
+      transition: all 0.1s;
+    }
+
+    .interactive-node:hover {
+      stroke: #fff !important;
+      stroke-width: 3px !important;
+    }
+
+    .legend {
+      display: flex;
+      gap: 10px;
+      font-size: 0.75rem;
+      color: #aaa;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
+    /* Relation Lists */
+    .relation-section {
+      margin-bottom: 20px;
+    }
+
+    .relation-section h3 {
+      font-size: 0.9rem;
+      color: #aaa;
+      margin: 0 0 10px 0;
+    }
+
+    .relation-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: grid;
+      gap: 8px;
+    }
+
+    .relation-item {
+      background: #222;
+      padding: 10px;
+      border-radius: 6px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      border: 1px solid #333;
+      transition: all 0.2s;
+    }
+
+    .relation-item:hover {
+      background: #2a2a2a;
+      border-color: var(--accent);
+      transform: translateX(4px);
+    }
+
+    .relation-name {
+      font-weight: bold;
+      font-size: 0.9rem;
+      color: #fff;
+    }
+
+    .relation-diff {
+      font-size: 0.75rem;
+      color: #aaa;
+      margin-left: 6px;
+      background: #111;
+      padding: 2px 6px;
+      border-radius: 4px;
+      border: 1px solid #444;
+    }
+
+    .relation-meta {
+      display: flex;
+      gap: 4px;
+    }
+
+    .keyboard-hint {
+      font-size: 1rem;
+      color: #666;
+      margin-top: auto;
+      margin-bottom: 5px;
+      text-align: center;
+      padding-top: 10px;
+      flex-shrink: 0;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="container">
+
+    <!-- 左カラム：ビジュアライザ -->
+    <div class="panel left-panel">
+      <div class="vis-header">
+        <h1>Scale Visualizer</h1>
+        <div class="legend">
+          <div class="legend-item">
+            <div class="dot" style="background: var(--added)"></div>追加
+          </div>
+          <div class="legend-item">
+            <div class="dot" style="background: var(--removed)"></div>消滅
+          </div>
+          <div class="legend-item">
+            <div class="dot" style="background: var(--subset)"></div>Subset
+          </div>
+          <button class="btn" id="toggle-view" onclick="toggleViewMode()">View: Chromatic</button>
+        </div>
+      </div>
+      <div class="circle-container" id="svg-container"></div>
+      <div class="keyboard-hint">
+        [←/→] Root Shift | [Z X C...] -1 Oct | [A S D...] Base | [Q W E...] +1 Oct
+      </div>
+    </div>
+
+    <!-- 右カラム：コントロール＆リスト -->
+    <div class="right-panel">
+
+      <!-- 固定コントロールエリア -->
+      <div class="right-fixed">
+        <!-- Scale Selection -->
+        <div style="margin-bottom: 15px;">
+          <select id="scale-select"
+            style="font-size: 1.1rem; font-weight: bold; padding: 10px; background: #1a1a1a;"></select>
+        </div>
+
+        <!-- Global Controls Grid -->
+        <div class="controls-grid">
+          <div class="control-group">
+            <label>Root Note</label>
+            <select id="root-select">
+              <option value="60">C</option>
+              <option value="61">C# / Db</option>
+              <option value="62">D</option>
+              <option value="63">D# / Eb</option>
+              <option value="64">E</option>
+              <option value="65">F</option>
+              <option value="66">F# / Gb</option>
+              <option value="67">G</option>
+              <option value="68">G# / Ab</option>
+              <option value="69">A</option>
+              <option value="70">A# / Bb</option>
+              <option value="71">B</option>
+            </select>
+          </div>
+          <div class="control-group">
+            <label>Octave Shift</label>
+            <select id="octave-select">
+              <option value="-2">-2 Oct</option>
+              <option value="-1">-1 Oct</option>
+              <option value="0" selected>0 (Base)</option>
+              <option value="1">+1 Oct</option>
+              <option value="2">+2 Oct</option>
+            </select>
+          </div>
+          <div class="control-group">
+            <label>Master Vol</label>
+            <input type="range" id="master-vol" min="0" max="1" step="0.01" value="0.5">
+          </div>
+          <div class="control-group">
+            <label>MIDI Out</label>
+            <select id="midi-select">
+              <option value="none">Internal Synth Only</option>
+            </select>
+          </div>
+          <div class="control-group" style="justify-content: flex-end;">
+            <label>
+              <input type="checkbox" id="hold-toggle" class="toggle-checkbox">
+              <div class="toggle-label">HOLD</div>
+            </label>
+          </div>
+          <div class="control-group" style="justify-content: flex-end;">
+            <button class="btn btn-play" onclick="playCurrentScale()">▶ PLAY SCALE</button>
+          </div>
+        </div>
+
+        <!-- Info Card -->
+        <div class="info-title" id="info-name">Ionian</div>
+        <div class="tags">
+          <span class="tag group" id="info-group">Major</span>
+          <span class="tag chord" id="info-chord">Maj7</span>
+          <span class="tag tendency" id="info-tendency">Bright</span>
+        </div>
+        <p class="description" id="info-desc">明るく安定した響き。標準的なメジャースケール。</p>
+
+        <details id="aliases-details">
+          <summary>Tidal Default Names / Aliases</summary>
+          <div class="details-content" id="info-aliases"></div>
+        </details>
+
+        <details id="subsets-details">
+          <summary>Included Subsets</summary>
+          <div class="details-content" id="info-subsets"></div>
+        </details>
+      </div>
+
+      <!-- スクロールリストエリア -->
+      <div class="right-scrollable">
+        <h2>Modal Interchange / Modulations</h2>
+        <div class="relation-section">
+          <h3>Very Close (1〜2音の変化)</h3>
+          <ul class="relation-list" id="list-1diff"></ul>
+        </div>
+        <div class="relation-section">
+          <h3>Moderate Shift (3〜4音の変化)</h3>
+          <ul class="relation-list" id="list-2diff"></ul>
+        </div>
+        <div class="relation-section">
+          <h3>Relative Modes (平行調・ルート違い)</h3>
+          <ul class="relation-list" id="list-relative"></ul>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    // ==========================================
+    // 1. Data Base
+    // ==========================================
+    const subsetDatabase = [
+      { id: "minPent", name: "Minor Pent", intervals: [0, 3, 5, 7, 10], description: "ブルージーで土臭い。テクノやロックの基本。" },
+      { id: "majPent", name: "Major Pent", intervals: [0, 2, 4, 7, 9], description: "明るく大衆的。メロディアスで親しみやすい響き。" },
+      { id: "ritusen", name: "Ritusen", intervals: [0, 2, 5, 7, 9], description: "雅楽などで使われる日本の伝統音階。" },
+      { id: "egyptian", name: "Egyptian", intervals: [0, 2, 5, 7, 10], description: "エジプト風のエキゾチックな響き。" },
+      { id: "kumai", name: "Kumai", intervals: [0, 2, 3, 7, 9], description: "琉球音階に似た日本の古い音階。" },
+      { id: "hirajoshi", name: "Hirajoshi", intervals: [0, 2, 3, 7, 8], description: "平調子（琴のチューニング）。和風の響き。" },
+      { id: "iwato", name: "Iwato", intervals: [0, 1, 5, 6, 10], description: "岩戸音階。非常に暗く緊張感がある。" },
+      { id: "chinese", name: "Chinese", intervals: [0, 4, 6, 7, 11], description: "中国の伝統的な響き。明るくエキゾチック。" },
+      { id: "indian", name: "Indian", intervals: [0, 4, 5, 7, 10], description: "インド音楽風のエキゾチックな響き。" },
+      { id: "pelog", name: "Pelog", intervals: [0, 1, 3, 7, 8], description: "ガムランのペロッグ音階。神秘的。" },
+      { id: "prometheus", name: "Prometheus", intervals: [0, 2, 4, 6, 11], description: "スクリャービンの「神秘和音」。調性が曖昧。" },
+      { id: "scriabin", name: "Scriabin", intervals: [0, 1, 4, 7, 9], description: "ミステリアスで緊張感のある響き。" },
+      { id: "hexMajor7", name: "Hex Major 7", intervals: [0, 2, 4, 7, 9, 11], description: "メジャー7thを強調した6音スケール。" },
+      { id: "hexDorian", name: "Hex Dorian", intervals: [0, 2, 3, 5, 7, 10], description: "ドリアンから6度を抜いたマイルドなマイナー。" },
+      { id: "hexPhrygian", name: "Hex Phrygian", intervals: [0, 1, 3, 5, 8, 10], description: "フリジアンの緊張感を保ちつつ音を間引く。" },
+      { id: "hexSus", name: "Hex Sus", intervals: [0, 2, 5, 7, 9, 10], description: "サス(sus)コードのような浮遊感。" },
+      { id: "hexMajor6", name: "Hex Major 6", intervals: [0, 2, 4, 5, 7, 9], description: "明るくスウィング感のあるスケール。" },
+      { id: "hexAeolian", name: "Hex Aeolian", intervals: [0, 3, 5, 7, 8, 10], description: "シンプルなマイナー感。" }
+    ];
+    subsetDatabase.forEach(s => { s.bitmask = s.intervals.reduce((mask, note) => mask | (1 << note), 0); });
+
+    const scaleDatabase = [
+      { id: "ionian", name: "Ionian", aliases: ["major"], group: "Major Modes", intervals: [0, 2, 4, 5, 7, 9, 11], chord: "Maj7", tendency: "Bright", description: "明るく安定した響き。標準的なメジャースケール。" },
+      { id: "dorian", name: "Dorian", aliases: [], group: "Major Modes", intervals: [0, 2, 3, 5, 7, 9, 10], chord: "m7", tendency: "Floaty", description: "暗さの中にナチュラル6度の明るさが混ざり、知的で浮遊感のある響き。" },
+      { id: "phrygian", name: "Phrygian", aliases: [], group: "Major Modes", intervals: [0, 1, 3, 5, 7, 8, 10], chord: "m7", tendency: "Dark", description: "♭2度による強い緊張感。スパニッシュやトライバルな響き。" },
+      { id: "lydian", name: "Lydian", aliases: [], group: "Major Modes", intervals: [0, 2, 4, 6, 7, 9, 11], chord: "Maj7", tendency: "Dreamy", description: "♯4度がもたらす浮遊感と透明感。SF的、アンビエントな広がり。" },
+      { id: "mixolydian", name: "Mixolydian", aliases: ["dominant"], group: "Major Modes", intervals: [0, 2, 4, 5, 7, 9, 10], chord: "7", tendency: "Bluesy", description: "明るいが♭7度によりどこか解決しないブルージーな響き。" },
+      { id: "aeolian", name: "Aeolian", aliases: ["minor", "naturalMinor"], group: "Major Modes", intervals: [0, 2, 3, 5, 7, 8, 10], chord: "m7", tendency: "Sad", description: "スタンダードなマイナースケール。重く、叙情的な響き。" },
+      { id: "locrian", name: "Locrian", aliases: [], group: "Major Modes", intervals: [0, 1, 3, 5, 6, 8, 10], chord: "m7(b5)", tendency: "Tense", description: "♭5度による極めて不安定でダークな響き。" },
+
+      { id: "doriann7", name: "Melodic Minor", aliases: ["melodicMinor"], group: "Melodic Minor", intervals: [0, 2, 3, 5, 7, 9, 11], chord: "mM7", tendency: "Mysterious", description: "マイナーの暗さとメジャーの明るさが同居する、スリリングで洗練された響き。" },
+      { id: "phrygiann6", name: "Dorian b2", aliases: [], group: "Melodic Minor", intervals: [0, 1, 3, 5, 7, 9, 10], chord: "m7", tendency: "Urban", description: "Phrygianの暗さにDorianの明るい6度が加わる、洗練された影。" },
+      { id: "lydians5", name: "Lydian Augmented", aliases: [], group: "Melodic Minor", intervals: [0, 2, 4, 6, 8, 9, 11], chord: "Maj7(#5)", tendency: "Surreal", description: "掴みどころのないホールトーン的な浮遊感。" },
+      { id: "lydianf7", name: "Lydian Dominant", aliases: ["bartok"], group: "Melodic Minor", intervals: [0, 2, 4, 6, 7, 9, 10], chord: "7", tendency: "Quirky", description: "浮遊感とブルース感が合体。奇妙で少しコミカルでおしゃれな響き。" },
+      { id: "mixolydianf6", name: "Mixolydian b6", aliases: ["hindu"], group: "Melodic Minor", intervals: [0, 2, 4, 5, 7, 8, 10], chord: "7", tendency: "Exotic", description: "メジャーなのに♭6度の暗さを持つ。ノスタルジックでエキゾチック。" },
+      { id: "locriann2", name: "Locrian n2", aliases: [], group: "Melodic Minor", intervals: [0, 2, 3, 5, 6, 8, 10], chord: "m7(b5)", tendency: "Jazzy", description: "Locrianより少し明るい。マイナー展開時の滑らかな進行に。" },
+      { id: "locrianf4", name: "Altered Scale", aliases: ["altered"], group: "Melodic Minor", intervals: [0, 1, 3, 4, 6, 8, 10], chord: "7(alt)", tendency: "Chaotic", description: "オルタード・テンションの塊。極めて高い緊張感と強い解決への引力。" },
+
+      { id: "aeoliann7", name: "Harmonic Minor", aliases: ["harmonicMinor"], group: "Harmonic Minor", intervals: [0, 2, 3, 5, 7, 8, 11], chord: "mM7", tendency: "Dramatic", description: "増2度が強烈な個性を放つ、クラシカルで劇的なマイナー。" },
+      { id: "locriann6", name: "Locrian n6", aliases: [], group: "Harmonic Minor", intervals: [0, 1, 3, 5, 6, 9, 10], chord: "m7(b5)", tendency: "Weird", description: "暗いベースに6度だけが明るい、不気味で奇妙な響き。" },
+      { id: "ionians5", name: "Ionian Augmented", aliases: [], group: "Harmonic Minor", intervals: [0, 2, 4, 5, 8, 9, 11], chord: "Maj7(#5)", tendency: "Cinematic", description: "メジャーなのに増5度を持つ。映画音楽のようなシュールな広がり。" },
+      { id: "dorians4", name: "Dorian #4", aliases: ["dorian(Tidal)", "romanianMinor", "ukrainianDorian"], group: "Harmonic Minor", intervals: [0, 2, 3, 6, 7, 9, 10], chord: "m7", tendency: "Gypsy", description: "独特の民族的フレーバーを持つ、メランコリックで情熱的な響き。" },
+      { id: "phrygiann3", name: "Phrygian Dominant", aliases: ["phrygianDominant", "spanish"], group: "Harmonic Minor", intervals: [0, 1, 4, 5, 7, 8, 10], chord: "7", tendency: "Arabic", description: "フラメンコや中東音楽で多用される、エキゾチックで強い個性。" },
+      { id: "lydians2", name: "Lydian #2", aliases: [], group: "Harmonic Minor", intervals: [0, 3, 4, 6, 7, 9, 11], chord: "Maj7", tendency: "Spiritual", description: "浮遊感に中東的なテンションが混ざる、異世界感のある響き。" },
+      { id: "locrianf4f7", name: "Ultralocrian", aliases: ["superLocrian"], group: "Harmonic Minor", intervals: [0, 1, 3, 4, 6, 8, 9], chord: "dim7", tendency: "Atonal", description: "完全に光を失った、極めてダークでホラー的な響き。" },
+
+      { id: "ionianf6", name: "Harmonic Major", aliases: ["harmonicMajor"], group: "Harmonic Major", intervals: [0, 2, 4, 5, 7, 8, 11], chord: "Maj7", tendency: "Romantic", description: "明るい風景の中に一瞬の切なさがよぎるシネマティックな響き。" },
+      { id: "dorianf5", name: "Dorian b5", aliases: [], group: "Harmonic Major", intervals: [0, 2, 3, 5, 6, 9, 10], chord: "m7(b5)", tendency: "Restless", description: "マイナー感と緊張感に長6度が混ざる。解決を先延ばしにする響き。" },
+      { id: "phrygianf4", name: "Phrygian b4", aliases: [], group: "Harmonic Major", intervals: [0, 1, 3, 4, 7, 8, 10], chord: "m7", tendency: "Complex", description: "極めて複雑でテンションの高い、難解な響き。" },
+      { id: "lydianf3", name: "Lydian b3", aliases: [], group: "Harmonic Major", intervals: [0, 2, 3, 6, 7, 9, 11], chord: "mM7", tendency: "Sharp", description: "鋭くシリアスで、エモーショナルなマイナーの響き。" },
+      { id: "mixolydianf2", name: "Mixolydian b2", aliases: [], group: "Harmonic Major", intervals: [0, 1, 4, 5, 7, 9, 10], chord: "7", tendency: "Dark Dominant", description: "中東感を含む、非常に暗くスリリングなドミナントスケール。" },
+      { id: "lydians2s5", name: "Lydian Aug #2", aliases: [], group: "Harmonic Major", intervals: [0, 3, 4, 6, 8, 9, 11], chord: "Maj7(#5)", tendency: "Avant-Garde", description: "シャープ系テンションが極まる、鋭く突き刺さるような前衛的な響き。" },
+      { id: "locrianf7", name: "Locrian bb7", aliases: [], group: "Harmonic Major", intervals: [0, 1, 3, 5, 6, 8, 9], chord: "dim7", tendency: "Gravity", description: "奈落に落ちていくような重力と暗さを持つ、強烈なディミニッシュ感。" },
+
+      { id: "bhairav", name: "Double Harm. Major", aliases: ["bhairav"], group: "World / Exotic", intervals: [0, 1, 4, 5, 7, 8, 11], chord: "Maj", tendency: "Exotic", description: "中東やインドの強烈なエキゾチック感。「ミザルー」の音階。" },
+      { id: "hungarianMinor", name: "Hungarian Minor", aliases: ["doubleHarmonicMinor"], group: "World / Exotic", intervals: [0, 2, 3, 6, 7, 8, 11], chord: "Minor", tendency: "Dramatic", description: "ジプシー音楽の代表格。情熱的でドラマチック。" },
+      { id: "todi", name: "Todi", aliases: [], group: "World / Exotic", intervals: [0, 1, 3, 6, 7, 8, 11], chord: "Minor", tendency: "Ritualistic", description: "Locrianに♮7度を足したような、極めて暗く呪術的なインド音階。" },
+      { id: "purvi", name: "Purvi", aliases: [], group: "World / Exotic", intervals: [0, 1, 4, 6, 7, 8, 11], chord: "Major", tendency: "Meditative", description: "♯4と♭6を持つ、複雑で瞑想的なインド音階。" },
+      { id: "marva", name: "Marva", aliases: [], group: "World / Exotic", intervals: [0, 1, 4, 6, 7, 9, 11], chord: "Major", tendency: "Floating", description: "完全5度が存在しない、不安定で浮遊するインド音階。" },
+      { id: "neapolitanMinor", name: "Neapolitan Minor", aliases: [], group: "World / Exotic", intervals: [0, 1, 3, 5, 7, 8, 11], chord: "Minor", tendency: "Tragic", description: "ハーモニックマイナーの2度をフラットさせた、悲劇的でクラシカルな響き。" },
+      { id: "neapolitanMajor", name: "Neapolitan Major", aliases: [], group: "World / Exotic", intervals: [0, 1, 3, 5, 7, 9, 11], chord: "Major", tendency: "Complex", description: "メロディックマイナーの2度をフラットさせた響き。" },
+      { id: "enigmatic", name: "Enigmatic Scale", aliases: ["enigmatic"], group: "World / Exotic", intervals: [0, 1, 4, 6, 8, 10, 11], chord: "Unknown", tendency: "Weird", description: "ヴェルディが使った謎の音階。不協和音が連続する奇妙な浮遊感。" },
+
+      { id: "diminished", name: "Diminished (W-H)", aliases: [], group: "Special", intervals: [0, 2, 3, 5, 6, 8, 9, 11], chord: "dim7", tendency: "Mysterious", description: "全音と半音が交互に並ぶ。無限に続くようなループ感。" },
+      { id: "domDim", name: "Dom. Dim. (H-W)", aliases: ["diminished2"], group: "Special", intervals: [0, 1, 3, 4, 6, 7, 9, 10], chord: "7", tendency: "Aggressive", description: "半音と全音が交互。攻撃的なベースラインに。" },
+      { id: "whole", name: "Whole Tone", aliases: [], group: "Special", intervals: [0, 2, 4, 6, 8, 10], chord: "aug", tendency: "Dreamy", description: "すべて全音間隔。調性のない浮遊感、夢の中。" },
+      { id: "augmented", name: "Augmented (m3-H)", aliases: [], group: "Special", intervals: [0, 3, 4, 7, 8, 11], chord: "aug", tendency: "Atonal", description: "マイナー3度と半音が交互に続く対称音階。" },
+      { id: "augmented2", name: "Augmented (H-m3)", aliases: [], group: "Special", intervals: [0, 1, 4, 5, 8, 9], chord: "aug", tendency: "Atonal", description: "半音とマイナー3度が交互に続く対称音階。" }
+    ];
+    scaleDatabase.forEach(s => { s.bitmask = s.intervals.reduce((mask, note) => mask | (1 << note), 0); });
+
+    // ==========================================
+    // 2. Global State & DOM
+    // ==========================================
+    const selectEl = document.getElementById('scale-select');
+    const rootSelect = document.getElementById('root-select');
+    const octaveSelect = document.getElementById('octave-select');
+    const holdToggle = document.getElementById('hold-toggle');
+    const volSlider = document.getElementById('master-vol');
+    const midiSelect = document.getElementById('midi-select');
+    const svgContainer = document.getElementById('svg-container');
+
+    let viewMode = 'chromatic';
+    let currentScaleId = 'ionian';
+    let previewScaleId = null;
+    let activeSubsetId = null;
+
+    // ==========================================
+    // 3. Audio & MIDI Engine
+    // ==========================================
+    let audioCtx = null;
+    let masterGain = null;
+    const activeHoldNotes = new Map();
+
+    let midiAccess = null;
+    let midiOutPort = null;
+
+    function initAudio() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        masterGain = audioCtx.createGain();
+        masterGain.connect(audioCtx.destination);
+        masterGain.gain.value = parseFloat(volSlider.value);
+      }
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+    }
+
+    volSlider.addEventListener('input', e => {
+      if (masterGain && audioCtx) {
+        // バグ修正: ボリューム変更を滑らかにしてノイズを防ぐ
+        masterGain.gain.setTargetAtTime(parseFloat(e.target.value), audioCtx.currentTime, 0.05);
+      }
+    });
+
+    async function setupMIDI() {
+      try {
+        midiAccess = await navigator.requestMIDIAccess();
+        updateMidiOutputs();
+        midiAccess.addEventListener('statechange', updateMidiOutputs);
+      } catch (err) {
+        console.warn('MIDI Access blocked or not supported. Using internal synth only.');
+        midiSelect.innerHTML = '<option value="none">MIDI Not Available</option>';
+        midiSelect.disabled = true;
+      }
+    }
+
+    function updateMidiOutputs() {
+      if (!midiAccess) return;
+      const currentVal = midiSelect.value;
+      midiSelect.innerHTML = '<option value="none">Internal Synth Only</option>';
+      for (let output of midiAccess.outputs.values()) {
+        midiSelect.innerHTML += `<option value="${output.id}">${output.name}</option>`;
+      } 
+      if ([...midiSelect.options].some(opt => opt.value === currentVal)) {
+        midiSelect.value = currentVal;
+      } else {
+        midiSelect.value = 'none';
+        midiOutPort = null;
+      }
+    }
+
+    midiSelect.addEventListener('change', e => {
+      if (e.target.value === 'none') {
+        midiOutPort = null;
+      } else if (midiAccess) {
+        midiOutPort = midiAccess.outputs.get(e.target.value);
+      }
+    });
+
+    function sendMidiOn(note) {
+      if (midiOutPort && note >= 0 && note <= 127) {
+        midiOutPort.send([0x90, note, 100]);
+      }
+    }
+
+    function sendMidiOff(note) {
+      if (midiOutPort && note >= 0 && note <= 127) {
+        midiOutPort.send([0x80, note, 0]);
+      }
+    }
+
+    function triggerNote(note, isPlayScale = false) {
+      if (note < 0 || note > 127) return;
+
+      const isHold = holdToggle.checked && !isPlayScale;
+
+      if (isHold) {
+        if (activeHoldNotes.has(note)) stopNote(note);
+        else startNote(note, true);
+      } else {
+        startNote(note, false);
+      }
+    }
+
+    function startNote(note, sustain) {
+      initAudio();
+      const freq = 440 * Math.pow(2, (note - 69) / 12);
+
+      const osc = audioCtx.createOscillator();
+      const env = audioCtx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.value = freq;
+
+      env.gain.value = 0;
+      env.gain.setTargetAtTime(0.4, audioCtx.currentTime, 0.02);
+
+      osc.connect(env);
+      env.connect(masterGain);
+      osc.start();
+
+      sendMidiOn(note);
+
+      if (!sustain) {
+        env.gain.setTargetAtTime(0, audioCtx.currentTime + 0.1, 0.2);
+        osc.stop(audioCtx.currentTime + 2.0);
+        setTimeout(() => sendMidiOff(note), 1000);
+      } else {
+        activeHoldNotes.set(note, { osc, env });
+      }
+    }
+
+    function stopNote(note) {
+      if (activeHoldNotes.has(note)) {
+        const { osc, env } = activeHoldNotes.get(note);
+        env.gain.setTargetAtTime(0, audioCtx.currentTime, 0.05);
+        osc.stop(audioCtx.currentTime + 1.0);
+        activeHoldNotes.delete(note);
+      }
+      sendMidiOff(note);
+    }
+
+    function clearAllHoldNotes() {
+      for (let note of activeHoldNotes.keys()) {
+        stopNote(note);
+      }
+    }
+
+    holdToggle.addEventListener('change', (e) => {
+      if (!e.target.checked) clearAllHoldNotes();
+    });
+
+    // ==========================================
+    // 4. Keyboard Shortcuts
+    // ==========================================
+    const keyMapLow = ['z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/']; // -1 Octave
+    const keyMapBase = ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', '\'']; // Base
+    const keyMapHigh = ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']']; // +1 Octave
+
+    window.addEventListener('keydown', e => {
+      if (e.repeat) return;
+      if (e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT') return;
+
+      if (e.key === 'ArrowRight') {
+        rootSelect.selectedIndex = (rootSelect.selectedIndex + 1) % 12;
+        clearAllHoldNotes();
+        updateApp();
+        return;
+      }
+      if (e.key === 'ArrowLeft') {
+        rootSelect.selectedIndex = (rootSelect.selectedIndex - 1 + 12) % 12;
+        clearAllHoldNotes();
+        updateApp();
+        return;
+      }
+
+      const currentScale = scaleDatabase.find(s => s.id === currentScaleId);
+      let intervalsToPlay = activeSubsetId ? subsetDatabase.find(s => s.id === activeSubsetId).intervals : currentScale.intervals;
+      intervalsToPlay = [...intervalsToPlay].sort((a, b) => a - b);
+
+      let keyIndex = -1;
+      let kbOctOffset = 0;
+
+      if (keyMapBase.includes(e.key)) { keyIndex = keyMapBase.indexOf(e.key); kbOctOffset = 0; }
+      else if (keyMapHigh.includes(e.key)) { keyIndex = keyMapHigh.indexOf(e.key); kbOctOffset = 1; }
+      else if (keyMapLow.includes(e.key)) { keyIndex = keyMapLow.indexOf(e.key); kbOctOffset = -1; }
+
+      if (keyIndex !== -1) {
+        let extraOctaves = Math.floor(keyIndex / intervalsToPlay.length);
+        let noteIndex = keyIndex % intervalsToPlay.length;
+        let finalInterval = intervalsToPlay[noteIndex] + (extraOctaves * 12);
+
+        const rootMidi = parseInt(rootSelect.value, 10);
+        const globalOctShift = parseInt(octaveSelect.value, 10);
+        let midiNote = rootMidi + finalInterval + ((globalOctShift + kbOctOffset) * 12);
+
+        triggerNote(midiNote);
+      }
+    });
+
+    // ==========================================
+    // 5. UI Logic & Visualizer
+    // ==========================================
+    function init() {
+      let currentGroup = '';
+      scaleDatabase.forEach(s => {
+        if (s.group !== currentGroup) {
+          const optGroup = document.createElement('optgroup');
+          optGroup.label = s.group;
+          selectEl.appendChild(optGroup);
+          currentGroup = s.group;
+        }
+        const opt = document.createElement('option');
+        opt.value = s.id;
+        opt.innerText = `${s.id} (${s.name})`;
+        selectEl.querySelector(`optgroup[label="${s.group}"]`).appendChild(opt);
+      });
+
+      selectEl.addEventListener('change', (e) => {
+        currentScaleId = e.target.value;
+        previewScaleId = null;
+        activeSubsetId = null;
+        clearAllHoldNotes();
+        updateApp();
+      });
+
+      rootSelect.addEventListener('change', () => { clearAllHoldNotes(); updateApp(); });
+      octaveSelect.addEventListener('change', () => clearAllHoldNotes());
+
+      setupMIDI();
+      updateApp();
+    }
+
+    function toggleViewMode() {
+      viewMode = viewMode === 'chromatic' ? 'fifths' : 'chromatic';
+      document.getElementById('toggle-view').innerText = `View: ${viewMode === 'chromatic' ? 'Chromatic' : 'Circle of Fifths'}`;
+      drawVisualizer();
+    }
+
+    function toggleSubset(subsetId) {
+      activeSubsetId = (activeSubsetId === subsetId) ? null : subsetId;
+      document.querySelectorAll('.subset-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.id === activeSubsetId);
+      });
+      clearAllHoldNotes();
+      drawVisualizer();
+    }
+
+    function selectScale(id) {
+      currentScaleId = id;
+      selectEl.value = id;
+      previewScaleId = null;
+      activeSubsetId = null;
+      clearAllHoldNotes();
+      updateApp();
+    }
+
+    function setPreview(id) { previewScaleId = id; drawVisualizer(); }
+    function clearPreview() { previewScaleId = null; drawVisualizer(); }
+
+    function countBits(n) { let count = 0; while (n) { count += n & 1; n >>= 1; } return count; }
+    function rotateRight(mask, shift) { return (mask >> shift) | ((mask << (12 - shift)) & 0xFFF); }
+
+    function triggerNoteFromUI(interval, ringOctOffset) {
+      const rootMidi = parseInt(rootSelect.value, 10);
+      const globalOctShift = parseInt(octaveSelect.value, 10);
+      const midiNote = rootMidi + interval + ((globalOctShift + ringOctOffset) * 12);
+      triggerNote(midiNote);
+    }
+
+    function playCurrentScale() {
+      const rootMidi = parseInt(rootSelect.value, 10);
+      const globalOctShift = parseInt(octaveSelect.value, 10);
+      const currentScale = scaleDatabase.find(s => s.id === currentScaleId);
+
+      let intervalsToPlay = activeSubsetId ? subsetDatabase.find(s => s.id === activeSubsetId).intervals : currentScale.intervals;
+      const sortedIntervals = [...intervalsToPlay].sort((a, b) => a - b);
+
+      const delayMs = 250;
+      sortedIntervals.forEach((interval, index) => {
+        const note = rootMidi + interval + (globalOctShift * 12);
+        setTimeout(() => triggerNote(note, true), index * delayMs);
+      });
+      setTimeout(() => triggerNote(rootMidi + 12 + (globalOctShift * 12), true), sortedIntervals.length * delayMs);
+    }
+
+    function createListItem(scale, diffText = "") {
+      const li = document.createElement('li');
+      li.className = 'relation-item';
+      li.onclick = () => selectScale(scale.id);
+      li.onmouseenter = () => setPreview(scale.id);
+      li.onmouseleave = () => clearPreview();
+      li.innerHTML = `
+        <div>
+          <div class="relation-name">${scale.id} <span class="relation-diff">${diffText}</span></div>
+          <div style="font-size: 0.75rem; color: #999; margin-top: 4px;">${scale.name}</div>
+        </div>
+        <div class="relation-meta">
+          <span class="tag chord">${scale.chord}</span>
+          <span class="tag tendency">${scale.tendency}</span>
+        </div>
+      `;
+      return li;
+    }
+
+    function drawVisualizer() {
+      const currentScale = scaleDatabase.find(s => s.id === currentScaleId);
+      const previewScale = previewScaleId ? scaleDatabase.find(s => s.id === previewScaleId) : null;
+      const activeSubset = activeSubsetId ? subsetDatabase.find(s => s.id === activeSubsetId) : null;
+
+      const width = 600, height = 600, cx = width / 2, cy = height / 2;
+
+      const getNotePos = (noteIndex, radius) => {
+        let posIndex = viewMode === 'chromatic' ? noteIndex : (noteIndex * 7) % 12;
+        const angle = (posIndex * 30 - 90) * (Math.PI / 180);
+        return { x: cx + radius * Math.cos(angle), y: cy + radius * Math.sin(angle) };
+      };
+
+      let svgHTML = `<svg width="100%" height="100%" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet">`;
+
+      svgHTML += `<circle cx="${cx}" cy="${cy}" r="240" fill="none" stroke="#222" stroke-width="1" stroke-dasharray="2 4" />`;
+      svgHTML += `<circle cx="${cx}" cy="${cy}" r="160" fill="none" stroke="#333" stroke-width="1" stroke-dasharray="4 4" />`;
+      svgHTML += `<circle cx="${cx}" cy="${cy}" r="80"  fill="none" stroke="#222" stroke-width="1" stroke-dasharray="2 4" />`;
+
+      const activeNotes = (previewScale || currentScale).intervals;
+      const sortedActiveNotes = viewMode === 'chromatic'
+        ? [...activeNotes].sort((a, b) => a - b)
+        : [...activeNotes].sort((a, b) => ((a * 7) % 12) - ((b * 7) % 12));
+
+      let pointsStr = sortedActiveNotes.map(n => `${getNotePos(n, 160).x},${getNotePos(n, 160).y}`).join(" ");
+      const polyFill = previewScale ? 'rgba(150, 150, 150, 0.2)' : 'rgba(0, 210, 255, 0.2)';
+      const polyStroke = previewScale ? '#888' : '#00d2ff';
+      svgHTML += `<polygon points="${pointsStr}" fill="${polyFill}" stroke="${polyStroke}" stroke-width="2" />`;
+
+      const rings = [
+        { octOffset: -1, radius: 240, opacity: 0.5 },
+        { octOffset: 0, radius: 160, opacity: 1.0 },
+        { octOffset: 1, radius: 80, opacity: 0.5 }
+      ];
+
+      rings.forEach(ring => {
+        for (let i = 0; i < 12; i++) {
+          const p = getNotePos(i, ring.radius);
+          const inCurrent = currentScale.intervals.includes(i);
+          const inPreview = previewScale ? previewScale.intervals.includes(i) : false;
+          const inSubset = activeSubset ? activeSubset.intervals.includes(i) : false;
+
+          let fillColor = "#333", strokeColor = "#555", r = 12, fontColor = "#777";
+
+          if (previewScale) {
+            if (inCurrent && inPreview) { fillColor = "#00d2ff"; strokeColor = "#00d2ff"; fontColor = "#000"; }
+            else if (inPreview && !inCurrent) { fillColor = "var(--added)"; strokeColor = "var(--added)"; fontColor = "#000"; r = 16; }
+            else if (inCurrent && !inPreview) { fillColor = "var(--removed)"; strokeColor = "var(--removed)"; fontColor = "#fff"; }
+          } else {
+            if (inCurrent) {
+              if (activeSubsetId) {
+                if (inSubset) { fillColor = "var(--subset)"; strokeColor = "var(--subset)"; fontColor = "#000"; r = 14; }
+                else { fillColor = "#222"; strokeColor = "#444"; fontColor = "#555"; }
+              } else {
+                fillColor = "#00d2ff"; strokeColor = "#00d2ff"; fontColor = "#000";
+              }
+            }
+          }
+
+          svgHTML += `<circle class="interactive-node" cx="${p.x}" cy="${p.y}" r="${r}" fill="${fillColor}" stroke="${strokeColor}" stroke-width="2" opacity="${ring.opacity}" onclick="triggerNoteFromUI(${i}, ${ring.octOffset})" />`;
+          svgHTML += `<text class="interactive-node" x="${p.x}" y="${p.y + 4}" font-size="12" font-weight="bold" fill="${fontColor}" text-anchor="middle" opacity="${ring.opacity}" onclick="triggerNoteFromUI(${i}, ${ring.octOffset})">${i}</text>`;
+        }
+      });
+
+      svgHTML += `</svg>`;
+      svgContainer.innerHTML = svgHTML;
+    }
+
+    function updateApp() {
+      const currentScale = scaleDatabase.find(s => s.id === currentScaleId);
+
+      document.getElementById('info-name').innerText = currentScale.name;
+      document.getElementById('info-group').innerText = currentScale.group;
+      document.getElementById('info-chord').innerText = currentScale.chord;
+      document.getElementById('info-tendency').innerText = currentScale.tendency;
+      document.getElementById('info-desc').innerText = currentScale.description;
+
+      const aliasesEl = document.getElementById('info-aliases');
+      const aliasesDetails = document.getElementById('aliases-details');
+      if (currentScale.aliases && currentScale.aliases.length > 0) {
+        aliasesDetails.style.display = 'block';
+        aliasesEl.innerHTML = currentScale.aliases.map(a => `<span class="sub-tag">${a}</span>`).join('');
+      } else {
+        aliasesDetails.style.display = 'none';
+      }
+
+      const subsetsEl = document.getElementById('info-subsets');
+      const subsetsDetails = document.getElementById('subsets-details');
+      const includedSubsets = subsetDatabase.filter(sub => (currentScale.bitmask & sub.bitmask) === sub.bitmask);
+
+      if (includedSubsets.length > 0) {
+        subsetsDetails.style.display = 'block';
+        subsetsEl.innerHTML = includedSubsets.map(s => `
+          <button class="subset-btn ${s.id === activeSubsetId ? 'active' : ''}" 
+                  data-id="${s.id}" 
+                  onclick="toggleSubset('${s.id}')"
+                  title="${s.description}\n[${s.intervals.join(',')}]">
+            ${s.name}
+          </button>
+        `).join('');
+      } else {
+        subsetsDetails.style.display = 'none';
+        activeSubsetId = null;
+      }
+
+      drawVisualizer();
+
+      const list1 = document.getElementById('list-1diff');
+      const list2 = document.getElementById('list-2diff');
+      const listRel = document.getElementById('list-relative');
+      list1.innerHTML = ''; list2.innerHTML = ''; listRel.innerHTML = '';
+
+      scaleDatabase.forEach(target => {
+        if (target.id === currentScale.id) return;
+        const currentMask = currentScale.bitmask;
+        const targetMask = target.bitmask;
+        const added = countBits((~currentMask & targetMask) & 0xFFF);
+        const removed = countBits((currentMask & ~targetMask) & 0xFFF);
+        const totalDiff = added + removed;
+
+        let diffText = "";
+        if (added > 0 && removed > 0) diffText = `(+${added} / -${removed})`;
+        else if (added > 0) diffText = `(+${added})`;
+        else if (removed > 0) diffText = `(-${removed})`;
+
+        if (totalDiff === 1 || totalDiff === 2) list1.appendChild(createListItem(target, diffText));
+        else if (totalDiff === 3 || totalDiff === 4) list2.appendChild(createListItem(target, diffText));
+
+        for (let shift = 1; shift < 12; shift++) {
+          if (rotateRight(currentMask, shift) === targetMask) {
+            let shiftDir = shift <= 6 ? `+${shift}` : `-${12 - shift}`;
+            listRel.appendChild(createListItem(target, `(Root ${shiftDir})`));
+            break;
+          }
+        }
+      });
+
+      if (!list1.children.length) list1.innerHTML = '<li class="relation-item" style="cursor:default">該当なし</li>';
+      if (!list2.children.length) list2.innerHTML = '<li class="relation-item" style="cursor:default">該当なし</li>';
+      if (!listRel.children.length) listRel.innerHTML = '<li class="relation-item" style="cursor:default">該当なし</li>';
+    }
+
+    init();
+  </script>
+</body>
+
+</html>
